@@ -52,6 +52,7 @@ func NewSMD() (this *SMD) {
 }
 
 func (this *SMD) Decode(file *os.File) bool {
+	fmt.Printf("Decoding\n")
 	// Read the header
 	headerData := utils.ReadNextBytes(file, 40)
 	err := binary.Read(bytes.NewBuffer(headerData), binary.LittleEndian, &this.Header)
@@ -103,23 +104,33 @@ func (this *SMD) Decode(file *os.File) bool {
 }
 
 func (this *SMD) Convert(fileType string, file *os.File) {
+	fmt.Printf("Converting\n")
 	w := bufio.NewWriter(file)
 
 	// Write verts
 	for i := 0; i < len(this.VertexBuffer); i++ {
 		vert := this.VertexBuffer[i]
-		w.WriteString(fmt.Sprintf("v %f %f %f\n", vert.X, vert.Y, vert.Z))
+		w.WriteString(fmt.Sprintf("v %f %f %f\n", vert.X, -vert.Z, vert.Y))
 	}
 
 	// Write UVs
-	/* for i := 0; i < len(this.VertexBuffer); i++ {
+	for i := 0; i < len(this.VertexBuffer); i++ {
 		vert := this.VertexBuffer[i]
 		w.WriteString(fmt.Sprintf("vt %s %s\n", vert.U, vert.V))
-	} */
+	}
 
+	currGroup := 0
 	// Write Faces
 	for i := 0; i < int(this.Header.NumIdx); i++ {
-		w.WriteString(fmt.Sprintf("f %d %d %d\n", this.IndexBuffer[i*3]+1, this.IndexBuffer[i*3+1]+1, this.IndexBuffer[i*3+2]+1))
+		if len(this.MeshDefinitions) > currGroup && i == int(this.MeshDefinitions[currGroup].FaceOffset) {
+			w.WriteString(fmt.Sprintf("g %s\n", this.Names[currGroup]))
+			currGroup++
+		}
+		w.WriteString(
+			fmt.Sprintf("f %d/%d %d/%d %d/%d\n",
+				this.IndexBuffer[i*3]+1, this.IndexBuffer[i*3]+1,
+				this.IndexBuffer[i*3+1]+1, this.IndexBuffer[i*3+1]+1,
+				this.IndexBuffer[i*3+2]+1, this.IndexBuffer[i*3+2]+1))
 	}
 
 	w.Flush()
