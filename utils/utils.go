@@ -3,13 +3,13 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
-	"os"
 	"unicode/utf16"
 	"unicode/utf8"
 )
 
-func ReadNextBytes(file *os.File, number int) []byte {
+func ReadNextBytes(file io.Reader, number int) []byte {
 	bytes := make([]byte, number)
 
 	_, err := file.Read(bytes)

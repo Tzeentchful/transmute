@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -51,7 +52,7 @@ func NewSMD() (this *SMD) {
 	return
 }
 
-func (this *SMD) Decode(file *os.File) bool {
+func (this *SMD) Decode(file io.Reader) bool {
 	fmt.Printf("Decoding\n")
 	// Read the header
 	headerData := utils.ReadNextBytes(file, 40)
@@ -59,6 +60,8 @@ func (this *SMD) Decode(file *os.File) bool {
 	if err != nil {
 		log.Fatal("Header read failed ", err)
 	}
+
+	fmt.Printf("Header: %v\n", this.Header)
 
 	this.MeshDefinitions = make([]MeshDefinition, this.Header.NumMeshs)
 	for i := 0; i < int(this.Header.NumMeshs); i++ {
@@ -81,23 +84,31 @@ func (this *SMD) Decode(file *os.File) bool {
 
 		this.Names[i], err = utils.DecodeUTF16(stringData)
 
+		fmt.Printf("String: %#x : %s\n", stringData, this.Names[i])
+
 		if err != nil {
 			log.Fatal("String read failed ", err)
 		}
 	}
 
 	this.IndexBuffer = make([]uint16, this.Header.NumIdx*3)
-	indexBufData := utils.ReadNextBytes(file, int(this.Header.NumIdx*3)*2)
-	err = binary.Read(bytes.NewBuffer(indexBufData), binary.LittleEndian, &this.IndexBuffer)
-	if err != nil {
-		log.Fatal("Index Buffer read failed ", err)
+
+	for i := 0; i < int(this.Header.NumIdx*3); i++ {
+		this.IndexBuffer[i] = binary.LittleEndian.Uint16(utils.ReadNextBytes(file, 2))
 	}
 
 	this.VertexBuffer = make([]SMDVertex, this.Header.NumVert)
-	vertBufData := utils.ReadNextBytes(file, int(this.Header.NumVert)*32)
-	err = binary.Read(bytes.NewBuffer(vertBufData), binary.LittleEndian, &this.VertexBuffer)
-	if err != nil {
-		log.Fatal("Vertex Buffer read failed ", err)
+
+	for i := 0; i < int(this.Header.NumVert); i++ {
+		vetData := utils.ReadNextBytes(file, 32)
+		err = binary.Read(bytes.NewBuffer(vetData), binary.LittleEndian, &this.VertexBuffer[i])
+		if err != nil {
+			log.Fatal("Error reading vert ", err)
+		}
+		if this.VertexBuffer[i].U < 0 {
+			fmt.Printf("Found at %d\n", i)
+			break
+		}
 	}
 
 	return true
@@ -110,6 +121,12 @@ func (this *SMD) Convert(fileType string, file *os.File) {
 	// Write verts
 	for i := 0; i < len(this.VertexBuffer); i++ {
 		vert := this.VertexBuffer[i]
+		// fmt.Printf("Vert: %v\n", vert)
+		if vert.U < 0 {
+			fmt.Printf("Found at %d\n", i)
+			break
+		}
+
 		w.WriteString(fmt.Sprintf("v %f %f %f\n", vert.X, -vert.Z, vert.Y))
 	}
 
